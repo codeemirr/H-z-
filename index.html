@@ -62,7 +62,8 @@
     const ctx = canvas.getContext("2d");
     let currentSpeed = 0, maxSpeed = 0, totalDistance = 0, speedSum = 0, speedCount = 0;
     let previousPosition = null;
-
+let pathCoordinates = [];
+const pathLine = L.polyline([], { color: 'red' }).addTo(map);
     const map = L.map('map').setView([0, 0], 15);
     L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 18 }).addTo(map);
     const marker = L.marker([0, 0]).addTo(map);
@@ -137,6 +138,10 @@
         previousPosition = coords;
         marker.setLatLng([lat, lon]);
         map.setView([lat, lon]);
+        if (speed > 0) {
+  pathCoordinates.push([lat, lon]);
+  pathLine.setLatLngs(pathCoordinates);
+}
 
         updateUI();
       }, err => {
