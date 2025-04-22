@@ -60,13 +60,16 @@
   <script>
     const canvas = document.getElementById("speedometer");
     const ctx = canvas.getContext("2d");
+
     let currentSpeed = 0, maxSpeed = 0, totalDistance = 0, speedSum = 0, speedCount = 0;
     let previousPosition = null;
-let pathCoordinates = [];
-const pathLine = L.polyline([], { color: 'red' }).addTo(map);
+
     const map = L.map('map').setView([0, 0], 15);
     L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 18 }).addTo(map);
     const marker = L.marker([0, 0]).addTo(map);
+
+    let pathCoordinates = [];
+    const pathLine = L.polyline([], { color: 'red' }).addTo(map);
 
     function drawGauge(speed) {
       ctx.clearRect(0, 0, canvas.width, canvas.height);
@@ -100,9 +103,14 @@ const pathLine = L.polyline([], { color: 'red' }).addTo(map);
     }
 
     function resetAll() {
-      currentSpeed = 0; maxSpeed = 0; totalDistance = 0;
-      speedSum = 0; speedCount = 0;
+      currentSpeed = 0;
+      maxSpeed = 0;
+      totalDistance = 0;
+      speedSum = 0;
+      speedCount = 0;
       previousPosition = null;
+      pathCoordinates = [];
+      pathLine.setLatLngs([]);
     }
 
     function getDistance(lat1, lon1, lat2, lon2) {
@@ -121,7 +129,10 @@ const pathLine = L.polyline([], { color: 'red' }).addTo(map);
         const lat = coords.latitude;
         const lon = coords.longitude;
 
-        const speed = coords.speed != null && coords.speed > 0 ? coords.speed * 3.6 : 0;
+        // Eğer hız bilinmiyorsa veya 0 ise hiçbir şey yapma (çizme)
+        if (coords.speed == null || coords.speed <= 0) return;
+
+        const speed = coords.speed * 3.6;
         currentSpeed = speed;
         maxSpeed = Math.max(maxSpeed, speed);
         speedSum += speed;
@@ -138,14 +149,9 @@ const pathLine = L.polyline([], { color: 'red' }).addTo(map);
         previousPosition = coords;
         marker.setLatLng([lat, lon]);
         map.setView([lat, lon]);
-        if (speed > 0) {
-  pathCoordinates.push([lat, lon]);
-  pathLine.setLatLngs(pathCoordinates);
-}
-        if (speed > 0) {
-  pathCoordinates.push([lat, lon]);
-  pathLine.setLatLngs(pathCoordinates);
-}
+
+        pathCoordinates.push([lat, lon]);
+        pathLine.setLatLngs(pathCoordinates);
 
         updateUI();
       }, err => {
