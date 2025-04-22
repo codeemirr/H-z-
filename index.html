@@ -8,7 +8,6 @@
   <link rel="manifest" href="/H-z-/manifest.json">
   <meta name="theme-color" content="#000000">
   <link rel="apple-touch-icon" href="/H-z-/icon-192.png">
-
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.3/dist/leaflet.css" />
   <style>
     html, body {
@@ -53,7 +52,6 @@
   <div class="info">Toplam: <span class="value" id="distance">0.00</span> km</div>
   <div class="info">Ortalama: <span class="value" id="avgSpeed">0.0</span> km/s</div>
   <button onclick="resetAll()">SIFIRLA</button>
-
   <div id="map"></div>
 
   <script src="https://unpkg.com/leaflet@1.9.3/dist/leaflet.js"></script>
@@ -63,34 +61,58 @@
 
     let currentSpeed = 0, maxSpeed = 0, totalDistance = 0, speedSum = 0, speedCount = 0;
     let previousPosition = null;
+    let pathCoordinates = [];
 
     const map = L.map('map').setView([0, 0], 15);
     L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 18 }).addTo(map);
     const marker = L.marker([0, 0]).addTo(map);
-
-    let pathCoordinates = [];
     const pathLine = L.polyline([], { color: 'red' }).addTo(map);
+
+    function getNeedleColor(speed) {
+      if (speed < 30) return 'deepskyblue';
+      if (speed < 60) return 'lime';
+      if (speed < 90) return 'yellow';
+      if (speed < 120) return 'orange';
+      return 'red';
+    }
 
     function drawGauge(speed) {
       ctx.clearRect(0, 0, canvas.width, canvas.height);
       const cx = canvas.width / 2, cy = canvas.height, r = 90;
 
+      // Çerçeve
       ctx.beginPath();
       ctx.arc(cx, cy, r, Math.PI, 2 * Math.PI);
       ctx.lineWidth = 10;
       ctx.strokeStyle = "#444";
       ctx.stroke();
 
+      // Sayılar
+      ctx.fillStyle = "white";
+      ctx.font = "12px sans-serif";
+      for (let s = 0; s <= 180; s += 30) {
+        const angle = Math.PI + (s / 180) * Math.PI;
+        const labelX = cx + (r + 25) * Math.cos(angle);
+        const labelY = cy + (r + 25) * Math.sin(angle);
+        ctx.fillText(s.toString(), labelX - 10, labelY + 4);
+      }
+
+      // İbre
       const angle = Math.PI + (Math.min(speed, 180) / 180) * Math.PI;
       const x = cx + r * Math.cos(angle);
       const y = cy + r * Math.sin(angle);
-
       ctx.beginPath();
       ctx.moveTo(cx, cy);
       ctx.lineTo(x, y);
-      ctx.strokeStyle = "white";
+      ctx.strokeStyle = getNeedleColor(speed);
       ctx.lineWidth = 4;
       ctx.stroke();
+
+      // Dijital hız
+      ctx.fillStyle = "white";
+      ctx.font = "28px sans-serif";
+      ctx.textAlign = "center";
+      ctx.fillText(speed.toFixed(0) + " km/s", cx, cy - 20);
     }
 
     function updateUI() {
@@ -111,6 +133,7 @@
       previousPosition = null;
       pathCoordinates = [];
       pathLine.setLatLngs([]);
+      updateUI();
     }
 
     function getDistance(lat1, lon1, lat2, lon2) {
@@ -129,8 +152,11 @@
         const lat = coords.latitude;
         const lon = coords.longitude;
 
-        // Eğer hız bilinmiyorsa veya 0 ise hiçbir şey yapma (çizme)
-        if (coords.speed == null || coords.speed <= 0) return;
+        if (coords.speed == null || coords.speed <= 0) {
+          currentSpeed = 0;
+          updateUI();
+          return;
+        }
 
         const speed = coords.speed * 3.6;
         currentSpeed = speed;
@@ -147,6 +173,7 @@
         }
 
         previousPosition = coords;
+
         marker.setLatLng([lat, lon]);
         map.setView([lat, lon]);
 
