@@ -3,80 +3,86 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Hız Göstergesi</title>
+  <title>Hız Göstergesi + Harita</title>
 
-  <!-- PWA manifest + tema -->
   <link rel="manifest" href="/H-z-/manifest.json">
   <meta name="theme-color" content="#000000">
   <link rel="apple-touch-icon" href="/H-z-/icon-192.png">
 
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.3/dist/leaflet.css" />
   <style>
-    body {
+    html, body {
       margin: 0;
       background: black;
       color: white;
       font-family: sans-serif;
-      text-align: center;
+      height: 100%;
+      display: flex;
+      flex-direction: column;
     }
     canvas {
-      margin-top: 30px;
+      margin-top: 20px;
     }
     .info {
-      margin-top: 20px;
-      font-size: 18px;
+      font-size: 16px;
     }
     .value {
+      font-size: 22px;
       font-weight: bold;
-      font-size: 24px;
     }
     button {
-      margin-top: 20px;
-      padding: 10px 20px;
-      font-size: 16px;
+      margin-top: 10px;
+      padding: 6px 16px;
+      font-size: 14px;
       background: none;
       color: white;
       border: 1px solid gray;
-      border-radius: 8px;
+      border-radius: 6px;
+    }
+    #map {
+      height: 45vh;
+      width: 100%;
+      margin-top: 20px;
     }
   </style>
 </head>
 <body>
-  <canvas id="speedometer" width="300" height="300"></canvas>
-
+  <canvas id="speedometer" width="300" height="200"></canvas>
   <div class="info">Hız: <span class="value" id="speed">0.0</span> km/s</div>
   <div class="info">Max: <span class="value" id="maxSpeed">0.0</span> km/s</div>
   <div class="info">Toplam: <span class="value" id="distance">0.00</span> km</div>
   <div class="info">Ortalama: <span class="value" id="avgSpeed">0.0</span> km/s</div>
   <button onclick="resetAll()">SIFIRLA</button>
 
+  <div id="map"></div>
+
+  <script src="https://unpkg.com/leaflet@1.9.3/dist/leaflet.js"></script>
   <script>
     const canvas = document.getElementById("speedometer");
     const ctx = canvas.getContext("2d");
-    let currentSpeed = 0;
-    let maxSpeed = 0;
-    let totalDistance = 0;
+    let currentSpeed = 0, maxSpeed = 0, totalDistance = 0, speedSum = 0, speedCount = 0;
     let previousPosition = null;
-    let speedSum = 0;
-    let speedCount = 0;
+
+    const map = L.map('map').setView([0, 0], 15);
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 18 }).addTo(map);
+    const marker = L.marker([0, 0]).addTo(map);
 
     function drawGauge(speed) {
       ctx.clearRect(0, 0, canvas.width, canvas.height);
-      const centerX = canvas.width / 2;
-      const centerY = canvas.height / 2;
-      const radius = 100;
+      const cx = canvas.width / 2, cy = canvas.height, r = 90;
 
       ctx.beginPath();
-      ctx.arc(centerX, centerY, radius, 0.75 * Math.PI, 0.25 * Math.PI, false);
+      ctx.arc(cx, cy, r, Math.PI, 2 * Math.PI);
       ctx.lineWidth = 10;
-      ctx.strokeStyle = "#555";
+      ctx.strokeStyle = "#444";
       ctx.stroke();
 
-      const angle = (Math.min(speed, 180) / 180) * Math.PI * 1.5 + Math.PI * 0.75;
-      const x = centerX + radius * Math.cos(angle);
-      const y = centerY + radius * Math.sin(angle);
+      const angle = Math.PI + (Math.min(speed, 180) / 180) * Math.PI;
+      const x = cx + r * Math.cos(angle);
+      const y = cy + r * Math.sin(angle);
 
       ctx.beginPath();
-      ctx.moveTo(centerX, centerY);
+      ctx.moveTo(cx, cy);
       ctx.lineTo(x, y);
       ctx.strokeStyle = "white";
       ctx.lineWidth = 4;
@@ -93,12 +99,9 @@
     }
 
     function resetAll() {
-      currentSpeed = 0;
-      maxSpeed = 0;
-      totalDistance = 0;
+      currentSpeed = 0; maxSpeed = 0; totalDistance = 0;
+      speedSum = 0; speedCount = 0;
       previousPosition = null;
-      speedSum = 0;
-      speedCount = 0;
     }
 
     function getDistance(lat1, lon1, lat2, lon2) {
@@ -106,10 +109,7 @@
       const toRad = x => x * Math.PI / 180;
       const dLat = toRad(lat2 - lat1);
       const dLon = toRad(lon2 - lon1);
-      const a =
-        Math.sin(dLat / 2) ** 2 +
-        Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) *
-        Math.sin(dLon / 2) ** 2;
+      const a = Math.sin(dLat / 2) ** 2 + Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) * Math.sin(dLon / 2) ** 2;
       const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
       return R * c;
     }
@@ -117,6 +117,9 @@
     if ("geolocation" in navigator) {
       navigator.geolocation.watchPosition(pos => {
         const coords = pos.coords;
+        const lat = coords.latitude;
+        const lon = coords.longitude;
+
         const speed = coords.speed != null && coords.speed > 0 ? coords.speed * 3.6 : 0;
         currentSpeed = speed;
         maxSpeed = Math.max(maxSpeed, speed);
@@ -126,18 +129,19 @@
         if (previousPosition) {
           const d = getDistance(
             previousPosition.latitude, previousPosition.longitude,
-            coords.latitude, coords.longitude
+            lat, lon
           );
           if (d < 1000) totalDistance += d;
         }
 
         previousPosition = coords;
+        marker.setLatLng([lat, lon]);
+        map.setView([lat, lon]);
+
         updateUI();
       }, err => {
         alert("GPS alınamadı: " + err.message);
       }, { enableHighAccuracy: true });
-    } else {
-      alert("Tarayıcınız GPS desteklemiyor.");
     }
 
     drawGauge(0);
