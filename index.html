@@ -142,6 +142,10 @@ const pathLine = L.polyline([], { color: 'red' }).addTo(map);
   pathCoordinates.push([lat, lon]);
   pathLine.setLatLngs(pathCoordinates);
 }
+        if (speed > 0) {
+  pathCoordinates.push([lat, lon]);
+  pathLine.setLatLngs(pathCoordinates);
+}
 
         updateUI();
       }, err => {
