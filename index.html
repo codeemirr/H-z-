@@ -1,50 +1,140 @@
-
 <!DOCTYPE html>
-<html>
+<html lang="tr">
 <head>
+  <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Speed Meter</title>
+  <title>Hız Göstergesi</title>
   <style>
     body {
-      font-family: Arial, sans-serif;
+      margin: 0;
+      background: black;
+      color: white;
+      font-family: sans-serif;
       text-align: center;
-      padding-top: 100px;
-      background-color: #111;
-      color: #0f0;
     }
-    h1 {
-      font-size: 50px;
+    canvas {
+      margin-top: 30px;
     }
-    small {
-      color: #888;
+    .info {
+      margin-top: 20px;
+      font-size: 18px;
+    }
+    .value {
+      font-weight: bold;
+      font-size: 24px;
+    }
+    button {
+      margin-top: 20px;
+      padding: 10px 20px;
+      font-size: 16px;
+      background: none;
+      color: white;
+      border: 1px solid gray;
+      border-radius: 8px;
     }
   </style>
 </head>
 <body>
-  <h1 id="speed">Speed: 0.0 km/h</h1>
-  <small>iPhone GPS hız ölçer</small>
+  <canvas id="speedometer" width="300" height="300"></canvas>
+
+  <div class="info">Hız: <span class="value" id="speed">0.0</span> km/s</div>
+  <div class="info">Max: <span class="value" id="maxSpeed">0.0</span> km/s</div>
+  <div class="info">Toplam: <span class="value" id="distance">0.00</span> km</div>
+  <div class="info">Ortalama: <span class="value" id="avgSpeed">0.0</span> km/s</div>
+  <button onclick="resetAll()">SIFIRLA</button>
 
   <script>
-    function updateSpeed(pos) {
-      let speed = pos.coords.speed;
-      if (speed === null || speed < 0) speed = 0;
-      speed = (speed * 3.6).toFixed(1);
-      document.getElementById("speed").innerText = "Speed: " + speed + " km/h";
+    const canvas = document.getElementById("speedometer");
+    const ctx = canvas.getContext("2d");
+    let currentSpeed = 0;
+    let maxSpeed = 0;
+    let totalDistance = 0;
+    let previousPosition = null;
+    let speedSum = 0;
+    let speedCount = 0;
+
+    function drawGauge(speed) {
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      const centerX = canvas.width / 2;
+      const centerY = canvas.height / 2;
+      const radius = 100;
+
+      ctx.beginPath();
+      ctx.arc(centerX, centerY, radius, 0.75 * Math.PI, 0.25 * Math.PI, false);
+      ctx.lineWidth = 10;
+      ctx.strokeStyle = "#555";
+      ctx.stroke();
+
+      const angle = (Math.min(speed, 180) / 180) * Math.PI * 1.5 + Math.PI * 0.75;
+      const x = centerX + radius * Math.cos(angle);
+      const y = centerY + radius * Math.sin(angle);
+
+      ctx.beginPath();
+      ctx.moveTo(centerX, centerY);
+      ctx.lineTo(x, y);
+      ctx.strokeStyle = "white";
+      ctx.lineWidth = 4;
+      ctx.stroke();
     }
 
-    function error(err) {
-      alert("Konum alınamadı: " + err.message);
+    function updateUI() {
+      document.getElementById("speed").textContent = currentSpeed.toFixed(1);
+      document.getElementById("maxSpeed").textContent = maxSpeed.toFixed(1);
+      document.getElementById("distance").textContent = (totalDistance / 1000).toFixed(2);
+      const avg = speedCount ? speedSum / speedCount : 0;
+      document.getElementById("avgSpeed").textContent = avg.toFixed(1);
+      drawGauge(currentSpeed);
     }
 
-    if (navigator.geolocation) {
-      navigator.geolocation.watchPosition(updateSpeed, error, {
-        enableHighAccuracy: true,
-        maximumAge: 0,
-        timeout: 10000
-      });
+    function resetAll() {
+      currentSpeed = 0;
+      maxSpeed = 0;
+      totalDistance = 0;
+      previousPosition = null;
+      speedSum = 0;
+      speedCount = 0;
+    }
+
+    function getDistance(lat1, lon1, lat2, lon2) {
+      const R = 6371e3;
+      const toRad = x => x * Math.PI / 180;
+      const dLat = toRad(lat2 - lat1);
+      const dLon = toRad(lon2 - lon1);
+      const a =
+        Math.sin(dLat / 2) ** 2 +
+        Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) *
+        Math.sin(dLon / 2) ** 2;
+      const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+      return R * c;
+    }
+
+    if ("geolocation" in navigator) {
+      navigator.geolocation.watchPosition(pos => {
+        const coords = pos.coords;
+        const speed = coords.speed != null && coords.speed > 0 ? coords.speed * 3.6 : 0;
+        currentSpeed = speed;
+        maxSpeed = Math.max(maxSpeed, speed);
+        speedSum += speed;
+        speedCount++;
+
+        if (previousPosition) {
+          const d = getDistance(
+            previousPosition.latitude, previousPosition.longitude,
+            coords.latitude, coords.longitude
+          );
+          if (d < 1000) totalDistance += d;
+        }
+
+        previousPosition = coords;
+        updateUI();
+      }, err => {
+        alert("GPS alınamadı: " + err.message);
+      }, { enableHighAccuracy: true });
     } else {
-      alert("Cihazın GPS desteklemiyor.");
+      alert("Tarayıcınız GPS desteklemiyor.");
     }
+
+    drawGauge(0);
   </script>
 </body>
 </html>
