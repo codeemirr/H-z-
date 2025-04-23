@@ -3,11 +3,8 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Hız Göstergesi + Harita</title>
+  <title>Hız + Harita + Hava Durumu</title>
 
-  <link rel="manifest" href="/H-z-/manifest.json">
-  <meta name="theme-color" content="#000000">
-  <link rel="apple-touch-icon" href="/H-z-/icon-192.png">
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.3/dist/leaflet.css" />
   <style>
     html, body {
@@ -48,6 +45,19 @@
       width: 100%;
       margin-top: 10px;
     }
+    #weatherInfo {
+      text-align: center;
+      margin: 10px 0;
+      font-size: 16px;
+    }
+    .icon-yellow {
+      font-size: 20px;
+      color: yellow;
+    }
+    .icon-red {
+      font-size: 20px;
+      color: red;
+    }
   </style>
 </head>
 <body>
@@ -57,13 +67,13 @@
   <div class="info">Toplam: <span class="value" id="distance">0.00</span> km</div>
   <div class="info">Ortalama: <span class="value" id="avgSpeed">0.0</span> km/s</div>
   <button onclick="resetAll()">SIFIRLA</button>
+  <div id="weatherInfo">Hava durumu yükleniyor...</div>
   <div id="map"></div>
 
   <script src="https://unpkg.com/leaflet@1.9.3/dist/leaflet.js"></script>
   <script>
     const canvas = document.getElementById("speedometer");
     const ctx = canvas.getContext("2d");
-
     const SPEED_FACTOR = 1.1;
 
     let currentSpeed = 0, maxSpeed = 0, totalDistance = 0, speedSum = 0, speedCount = 0;
@@ -152,6 +162,40 @@
       return R * c;
     }
 
+    function fetchWeather(lat, lon) {
+      const url = `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&current_weather=true`;
+      fetch(url)
+        .then(res => res.json())
+        .then(data => {
+          const weather = data.current_weather;
+          const el = document.getElementById("weatherInfo");
+          el.innerHTML = `Sıcaklık: ${weather.temperature}°C<br>Rüzgar: ${weather.windspeed} km/s`;
+        });
+    }
+
+    function fetchCrossings(lat, lon) {
+      const crossingsQuery = `
+        [out:json];
+        (
+          node(around:500,${lat},${lon})[highway=crossing];
+          node(around:500,${lat},${lon})[highway=traffic_signals];
+        );
+        out;`;
+      fetch("https://overpass-api.de/api/interpreter", {
+        method: "POST",
+        body: crossingsQuery
+      })
+        .then(res => res.json())
+        .then(data => {
+          data.elements.forEach(el => {
+            const icon = el.tags?.highway === "traffic_signals"
+              ? L.divIcon({ className: "icon-red", html: "&#128679;" })
+              : L.divIcon({ className: "icon-yellow", html: "&#128694;" });
+            L.marker([el.lat, el.lon], { icon }).addTo(map);
+          });
+        });
+    }
+
     if ("geolocation" in navigator) {
       navigator.geolocation.watchPosition(pos => {
         const coords = pos.coords;
@@ -186,6 +230,12 @@
       }, err => {
         alert("GPS alınamadı: " + err.message);
       }, { enableHighAccuracy: true });
+
+      navigator.geolocation.getCurrentPosition(pos => {
+        const { latitude, longitude } = pos.coords;
+        fetchWeather(latitude, longitude);
+        fetchCrossings(latitude, longitude);
+      });
     }
 
     drawGauge(0);
