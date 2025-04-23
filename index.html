@@ -3,8 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Hız + Harita + Hava Durumu</title>
-
+  <title>Hız + Yol Bilgisi</title>
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.3/dist/leaflet.css" />
   <style>
     html, body {
@@ -45,18 +44,10 @@
       width: 100%;
       margin-top: 10px;
     }
-    #weatherInfo {
+    #weatherInfo, #roadType {
       text-align: center;
-      margin: 10px 0;
+      margin: 5px 0;
       font-size: 16px;
-    }
-    .icon-yellow {
-      font-size: 20px;
-      color: yellow;
-    }
-    .icon-red {
-      font-size: 20px;
-      color: red;
     }
   </style>
 </head>
@@ -68,6 +59,7 @@
   <div class="info">Ortalama: <span class="value" id="avgSpeed">0.0</span> km/s</div>
   <button onclick="resetAll()">SIFIRLA</button>
   <div id="weatherInfo">Hava durumu yükleniyor...</div>
+  <div id="roadType">Yol bilgisi alınıyor...</div>
   <div id="map"></div>
 
   <script src="https://unpkg.com/leaflet@1.9.3/dist/leaflet.js"></script>
@@ -75,10 +67,10 @@
     const canvas = document.getElementById("speedometer");
     const ctx = canvas.getContext("2d");
     const SPEED_FACTOR = 1.1;
-
     let currentSpeed = 0, maxSpeed = 0, totalDistance = 0, speedSum = 0, speedCount = 0;
     let previousPosition = null;
     let pathCoordinates = [];
+    let currentSpeedLimit = null;
 
     const map = L.map('map').setView([0, 0], 15);
     L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 18 }).addTo(map);
@@ -86,6 +78,7 @@
     const pathLine = L.polyline([], { color: 'red' }).addTo(map);
 
     function getNeedleColor(speed) {
+      if (currentSpeedLimit && speed > currentSpeedLimit) return 'red';
       if (speed < 30) return 'deepskyblue';
       if (speed < 60) return 'lime';
       if (speed < 90) return 'yellow';
@@ -95,18 +88,11 @@
 
     function drawGauge(speed) {
       ctx.clearRect(0, 0, canvas.width, canvas.height);
-      const cx = canvas.width / 2;
-      const cy = 220;
-      const r = 90;
+      const cx = canvas.width / 2, cy = 220, r = 90;
+      ctx.beginPath(); ctx.arc(cx, cy, r, Math.PI, 2 * Math.PI);
+      ctx.lineWidth = 10; ctx.strokeStyle = "#444"; ctx.stroke();
 
-      ctx.beginPath();
-      ctx.arc(cx, cy, r, Math.PI, 2 * Math.PI);
-      ctx.lineWidth = 10;
-      ctx.strokeStyle = "#444";
-      ctx.stroke();
-
-      ctx.fillStyle = "white";
-      ctx.font = "12px sans-serif";
+      ctx.fillStyle = "white"; ctx.font = "12px sans-serif";
       for (let s = 0; s <= 180; s += 30) {
         const angle = Math.PI + (s / 180) * Math.PI;
         const labelX = cx + (r + 25) * Math.cos(angle);
@@ -115,18 +101,11 @@
       }
 
       const angle = Math.PI + (Math.min(speed, 180) / 180) * Math.PI;
-      const x = cx + r * Math.cos(angle);
-      const y = cy + r * Math.sin(angle);
-      ctx.beginPath();
-      ctx.moveTo(cx, cy);
-      ctx.lineTo(x, y);
-      ctx.strokeStyle = getNeedleColor(speed);
-      ctx.lineWidth = 4;
-      ctx.stroke();
+      const x = cx + r * Math.cos(angle), y = cy + r * Math.sin(angle);
+      ctx.beginPath(); ctx.moveTo(cx, cy); ctx.lineTo(x, y);
+      ctx.strokeStyle = getNeedleColor(speed); ctx.lineWidth = 4; ctx.stroke();
 
-      ctx.fillStyle = "white";
-      ctx.font = "28px sans-serif";
-      ctx.textAlign = "center";
+      ctx.fillStyle = "white"; ctx.font = "28px sans-serif"; ctx.textAlign = "center";
       ctx.fillText(speed.toFixed(0) + " km/s", cx, cy - 20);
     }
 
@@ -141,78 +120,65 @@
     }
 
     function resetAll() {
-      currentSpeed = 0;
-      maxSpeed = 0;
-      totalDistance = 0;
-      speedSum = 0;
-      speedCount = 0;
-      previousPosition = null;
-      pathCoordinates = [];
-      pathLine.setLatLngs([]);
+      currentSpeed = 0; maxSpeed = 0; totalDistance = 0; speedSum = 0; speedCount = 0;
+      previousPosition = null; pathCoordinates = []; pathLine.setLatLngs([]);
       updateUI();
     }
 
     function getDistance(lat1, lon1, lat2, lon2) {
       const R = 6371e3;
       const toRad = x => x * Math.PI / 180;
-      const dLat = toRad(lat2 - lat1);
-      const dLon = toRad(lon2 - lon1);
+      const dLat = toRad(lat2 - lat1), dLon = toRad(lon2 - lon1);
       const a = Math.sin(dLat / 2) ** 2 + Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) * Math.sin(dLon / 2) ** 2;
-      const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
-      return R * c;
+      return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
     }
 
     function fetchWeather(lat, lon) {
-      const url = `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&current_weather=true`;
-      fetch(url)
+      fetch(`https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&current_weather=true`)
         .then(res => res.json())
         .then(data => {
-          const weather = data.current_weather;
-          const el = document.getElementById("weatherInfo");
-          el.innerHTML = `Sıcaklık: ${weather.temperature}°C<br>Rüzgar: ${weather.windspeed} km/s`;
+          const w = data.current_weather;
+          document.getElementById("weatherInfo").innerHTML = `Sıcaklık: ${w.temperature}°C<br>Rüzgar: ${w.windspeed} km/s`;
         });
     }
 
-    function fetchCrossings(lat, lon) {
-      const crossingsQuery = `
-        [out:json];
-        (
-          node(around:500,${lat},${lon})[highway=crossing];
-          node(around:500,${lat},${lon})[highway=traffic_signals];
-        );
-        out;`;
+    function fetchRoadInfo(lat, lon) {
+      const q = `[out:json];way(around:30,${lat},${lon})[highway];out tags center;`;
       fetch("https://overpass-api.de/api/interpreter", {
         method: "POST",
-        body: crossingsQuery
-      })
-        .then(res => res.json())
+        body: q
+      }).then(res => res.json())
         .then(data => {
-          data.elements.forEach(el => {
-            const icon = el.tags?.highway === "traffic_signals"
-              ? L.divIcon({ className: "icon-red", html: "&#128679;" })
-              : L.divIcon({ className: "icon-yellow", html: "&#128694;" });
-            L.marker([el.lat, el.lon], { icon }).addTo(map);
-          });
+          const road = data.elements.find(el => el.tags && el.tags.highway);
+          if (road) {
+            const roadName = road.tags.highway;
+            const speedLimit = road.tags.maxspeed;
+            currentSpeedLimit = speedLimit ? parseFloat(speedLimit) : null;
+            document.getElementById("roadType").textContent =
+              "Yol tipi: " + roadName + (speedLimit ? ` – Hız limiti: ${speedLimit} km/s` : "");
+          }
         });
     }
 
     if ("geolocation" in navigator) {
       navigator.geolocation.watchPosition(pos => {
         const coords = pos.coords;
-        const lat = coords.latitude;
-        const lon = coords.longitude;
+        const lat = coords.latitude, lon = coords.longitude;
+        if (!lat || !lon) return;
+
+        if (!previousPosition) {
+          fetchWeather(lat, lon);
+          fetchRoadInfo(lat, lon);
+        }
 
         if (coords.speed == null || coords.speed <= 0) {
-          currentSpeed = 0;
-          updateUI();
-          return;
+          currentSpeed = 0; updateUI(); return;
         }
 
         const speed = coords.speed * 3.6;
         currentSpeed = speed;
         maxSpeed = Math.max(maxSpeed, speed);
-        speedSum += speed;
-        speedCount++;
+        speedSum += speed; speedCount++;
 
         if (previousPosition) {
           const d = getDistance(previousPosition.latitude, previousPosition.longitude, lat, lon);
@@ -220,22 +186,14 @@
         }
 
         previousPosition = coords;
-
         marker.setLatLng([lat, lon]);
         map.setView([lat, lon]);
         pathCoordinates.push([lat, lon]);
         pathLine.setLatLngs(pathCoordinates);
-
         updateUI();
       }, err => {
         alert("GPS alınamadı: " + err.message);
       }, { enableHighAccuracy: true });
-
-      navigator.geolocation.getCurrentPosition(pos => {
-        const { latitude, longitude } = pos.coords;
-        fetchWeather(latitude, longitude);
-        fetchCrossings(latitude, longitude);
-      });
     }
 
     drawGauge(0);
