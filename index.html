@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Hız + Yol Bilgisi</title>
+  <title>Hız Takip Sistemi</title>
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.3/dist/leaflet.css" />
   <style>
     html, body {
@@ -76,6 +76,24 @@
     L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 18 }).addTo(map);
     const marker = L.marker([0, 0]).addTo(map);
     const pathLine = L.polyline([], { color: 'red' }).addTo(map);
+
+    function translateRoadType(type) {
+      const map = {
+        motorway: "Otoyol",
+        trunk: "Ana Yol",
+        primary: "Birincil Yol",
+        secondary: "İkincil Yol",
+        tertiary: "Üçüncül Yol",
+        residential: "Yerleşim Yolu",
+        service: "Servis Yolu",
+        unclassified: "Sınıflandırılmamış",
+        footway: "Yaya Yolu",
+        path: "Patika",
+        cycleway: "Bisiklet Yolu",
+        pedestrian: "Yaya Bölgesi"
+      };
+      return map[type] || type;
+    }
 
     function getNeedleColor(speed) {
       if (currentSpeedLimit && speed > currentSpeedLimit) return 'red';
@@ -151,7 +169,7 @@
         .then(data => {
           const road = data.elements.find(el => el.tags && el.tags.highway);
           if (road) {
-            const roadName = road.tags.highway;
+            const roadName = translateRoadType(road.tags.highway);
             const speedLimit = road.tags.maxspeed;
             currentSpeedLimit = speedLimit ? parseFloat(speedLimit) : null;
             document.getElementById("roadType").textContent =
