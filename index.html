@@ -20,10 +20,14 @@
       flex-direction: column;
     }
     canvas {
-      margin-top: 20px;
+      margin-top: 40px;
+      width: 100%;
+      max-width: 400px;
+      align-self: center;
     }
     .info {
       font-size: 16px;
+      text-align: center;
     }
     .value {
       font-size: 22px;
@@ -37,16 +41,17 @@
       color: white;
       border: 1px solid gray;
       border-radius: 6px;
+      align-self: center;
     }
     #map {
-      height: 45vh;
+      height: 35vh;
       width: 100%;
-      margin-top: 20px;
+      margin-top: 10px;
     }
   </style>
 </head>
 <body>
-  <canvas id="speedometer" width="300" height="200"></canvas>
+  <canvas id="speedometer" width="300" height="240"></canvas>
   <div class="info">Hız: <span class="value" id="speed">0.0</span> km/s</div>
   <div class="info">Max: <span class="value" id="maxSpeed">0.0</span> km/s</div>
   <div class="info">Toplam: <span class="value" id="distance">0.00</span> km</div>
@@ -58,6 +63,8 @@
   <script>
     const canvas = document.getElementById("speedometer");
     const ctx = canvas.getContext("2d");
+
+    const SPEED_FACTOR = 1.1;
 
     let currentSpeed = 0, maxSpeed = 0, totalDistance = 0, speedSum = 0, speedCount = 0;
     let previousPosition = null;
@@ -78,16 +85,16 @@
 
     function drawGauge(speed) {
       ctx.clearRect(0, 0, canvas.width, canvas.height);
-      const cx = canvas.width / 2, cy = canvas.height, r = 90;
+      const cx = canvas.width / 2;
+      const cy = 220;
+      const r = 90;
 
-      // Çerçeve
       ctx.beginPath();
       ctx.arc(cx, cy, r, Math.PI, 2 * Math.PI);
       ctx.lineWidth = 10;
       ctx.strokeStyle = "#444";
       ctx.stroke();
 
-      // Sayılar
       ctx.fillStyle = "white";
       ctx.font = "12px sans-serif";
       for (let s = 0; s <= 180; s += 30) {
@@ -97,7 +104,6 @@
         ctx.fillText(s.toString(), labelX - 10, labelY + 4);
       }
 
-      // İbre
       const angle = Math.PI + (Math.min(speed, 180) / 180) * Math.PI;
       const x = cx + r * Math.cos(angle);
       const y = cy + r * Math.sin(angle);
@@ -108,7 +114,6 @@
       ctx.lineWidth = 4;
       ctx.stroke();
 
-      // Dijital hız
       ctx.fillStyle = "white";
       ctx.font = "28px sans-serif";
       ctx.textAlign = "center";
@@ -116,12 +121,13 @@
     }
 
     function updateUI() {
-      document.getElementById("speed").textContent = currentSpeed.toFixed(1);
-      document.getElementById("maxSpeed").textContent = maxSpeed.toFixed(1);
+      const shownSpeed = currentSpeed * SPEED_FACTOR;
+      document.getElementById("speed").textContent = shownSpeed.toFixed(1);
+      document.getElementById("maxSpeed").textContent = (maxSpeed * SPEED_FACTOR).toFixed(1);
       document.getElementById("distance").textContent = (totalDistance / 1000).toFixed(2);
-      const avg = speedCount ? speedSum / speedCount : 0;
+      const avg = speedCount ? (speedSum / speedCount) * SPEED_FACTOR : 0;
       document.getElementById("avgSpeed").textContent = avg.toFixed(1);
-      drawGauge(currentSpeed);
+      drawGauge(shownSpeed);
     }
 
     function resetAll() {
@@ -165,10 +171,7 @@
         speedCount++;
 
         if (previousPosition) {
-          const d = getDistance(
-            previousPosition.latitude, previousPosition.longitude,
-            lat, lon
-          );
+          const d = getDistance(previousPosition.latitude, previousPosition.longitude, lat, lon);
           if (d < 1000) totalDistance += d;
         }
 
@@ -176,7 +179,6 @@
 
         marker.setLatLng([lat, lon]);
         map.setView([lat, lon]);
-
         pathCoordinates.push([lat, lon]);
         pathLine.setLatLngs(pathCoordinates);
 
